@@ -44,6 +44,7 @@ import { KanbanCard } from "./kanban-card";
 import { AutoModeLog } from "./auto-mode-log";
 import { AgentOutputModal } from "./agent-output-modal";
 import { Plus, RefreshCw, Play, StopCircle, Loader2, ChevronUp, ChevronDown, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
 import { useAutoMode } from "@/hooks/use-auto-mode";
 
@@ -318,6 +319,9 @@ export function BoardView() {
     // Check concurrency limit before moving to in_progress
     if (targetStatus === "in_progress" && !autoMode.canStartNewTask) {
       console.log("[Board] Cannot start new task - at max concurrency limit");
+      toast.error("Concurrency limit reached", {
+        description: `You can only have ${autoMode.maxConcurrency} task${autoMode.maxConcurrency > 1 ? "s" : ""} running at a time. Wait for a task to complete or increase the limit.`,
+      });
       return;
     }
 
@@ -486,6 +490,22 @@ export function BoardView() {
     setShowOutputModal(true);
   };
 
+  const handleForceStopFeature = async (feature: Feature) => {
+    try {
+      await autoMode.stopFeature(feature.id);
+      // Move the feature back to backlog status after stopping
+      moveFeature(feature.id, "backlog");
+      toast.success("Agent stopped", {
+        description: `Stopped working on: ${feature.description.slice(0, 50)}${feature.description.length > 50 ? "..." : ""}`,
+      });
+    } catch (error) {
+      console.error("[Board] Error stopping feature:", error);
+      toast.error("Failed to stop agent", {
+        description: error instanceof Error ? error.message : "An error occurred",
+      });
+    }
+  };
+
   if (!currentProject) {
     return (
       <div
@@ -647,6 +667,7 @@ export function BoardView() {
                         onViewOutput={() => handleViewOutput(feature)}
                         onVerify={() => handleVerifyFeature(feature)}
                         onResume={() => handleResumeFeature(feature)}
+                        onForceStop={() => handleForceStopFeature(feature)}
                         hasContext={featuresWithContext.has(feature.id)}
                         isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
                       />

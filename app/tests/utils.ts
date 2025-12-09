@@ -335,3 +335,184 @@ export async function setupMockProjectWithConcurrency(
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
   }, concurrency);
 }
+
+/**
+ * Navigate to the context view
+ */
+export async function navigateToContext(page: Page): Promise<void> {
+  await page.goto("/");
+
+  // Wait for the page to load
+  await page.waitForLoadState("networkidle");
+
+  // Click on the Context nav button
+  const contextNav = page.locator('[data-testid="nav-context"]');
+  if (await contextNav.isVisible().catch(() => false)) {
+    await contextNav.click();
+  }
+
+  // Wait for the context view to be visible
+  await waitForElement(page, "context-view", { timeout: 10000 });
+}
+
+/**
+ * Get the context file list element
+ */
+export async function getContextFileList(page: Page): Promise<Locator> {
+  return page.locator('[data-testid="context-file-list"]');
+}
+
+/**
+ * Click on a context file in the list
+ */
+export async function clickContextFile(
+  page: Page,
+  fileName: string
+): Promise<void> {
+  const fileButton = page.locator(`[data-testid="context-file-${fileName}"]`);
+  await fileButton.click();
+}
+
+/**
+ * Get the context editor element
+ */
+export async function getContextEditor(page: Page): Promise<Locator> {
+  return page.locator('[data-testid="context-editor"]');
+}
+
+/**
+ * Open the add context file dialog
+ */
+export async function openAddContextFileDialog(page: Page): Promise<void> {
+  await clickElement(page, "add-context-file");
+  await waitForElement(page, "add-context-dialog");
+}
+
+/**
+ * Wait for an error toast to appear with specific text
+ */
+export async function waitForErrorToast(
+  page: Page,
+  titleText?: string,
+  options?: { timeout?: number }
+): Promise<Locator> {
+  // Sonner toasts use data-sonner-toast and data-type="error" for error toasts
+  const toastSelector = titleText
+    ? `[data-sonner-toast][data-type="error"]:has-text("${titleText}")`
+    : '[data-sonner-toast][data-type="error"]';
+
+  const toast = page.locator(toastSelector).first();
+  await toast.waitFor({
+    timeout: options?.timeout ?? 5000,
+    state: "visible",
+  });
+  return toast;
+}
+
+/**
+ * Check if an error toast is visible
+ */
+export async function isErrorToastVisible(
+  page: Page,
+  titleText?: string
+): Promise<boolean> {
+  const toastSelector = titleText
+    ? `[data-sonner-toast][data-type="error"]:has-text("${titleText}")`
+    : '[data-sonner-toast][data-type="error"]';
+
+  const toast = page.locator(toastSelector).first();
+  return await toast.isVisible();
+}
+
+/**
+ * Set up a mock project with specific running tasks to simulate concurrency limit
+ */
+export async function setupMockProjectAtConcurrencyLimit(
+  page: Page,
+  maxConcurrency: number = 1,
+  runningTasks: string[] = ["running-task-1"]
+): Promise<void> {
+  await page.addInitScript(
+    ({ maxConcurrency, runningTasks }: { maxConcurrency: number; runningTasks: string[] }) => {
+      const mockProject = {
+        id: "test-project-1",
+        name: "Test Project",
+        path: "/mock/test-project",
+        lastOpened: new Date().toISOString(),
+      };
+
+      const mockState = {
+        state: {
+          projects: [mockProject],
+          currentProject: mockProject,
+          theme: "dark",
+          sidebarOpen: true,
+          apiKeys: { anthropic: "", google: "" },
+          chatSessions: [],
+          chatHistoryOpen: false,
+          maxConcurrency: maxConcurrency,
+          isAutoModeRunning: false,
+          runningAutoTasks: runningTasks,
+          autoModeActivityLog: [],
+        },
+        version: 0,
+      };
+
+      localStorage.setItem("automaker-storage", JSON.stringify(mockState));
+    },
+    { maxConcurrency, runningTasks }
+  );
+}
+
+/**
+ * Get the force stop button for a specific feature
+ */
+export async function getForceStopButton(
+  page: Page,
+  featureId: string
+): Promise<Locator> {
+  return page.locator(`[data-testid="force-stop-${featureId}"]`);
+}
+
+/**
+ * Click the force stop button for a specific feature
+ */
+export async function clickForceStop(
+  page: Page,
+  featureId: string
+): Promise<void> {
+  const button = page.locator(`[data-testid="force-stop-${featureId}"]`);
+  await button.click();
+}
+
+/**
+ * Check if the force stop button is visible for a feature
+ */
+export async function isForceStopButtonVisible(
+  page: Page,
+  featureId: string
+): Promise<boolean> {
+  const button = page.locator(`[data-testid="force-stop-${featureId}"]`);
+  return await button.isVisible();
+}
+
+/**
+ * Wait for a success toast to appear with specific text
+ */
+export async function waitForSuccessToast(
+  page: Page,
+  titleText?: string,
+  options?: { timeout?: number }
+): Promise<Locator> {
+  // Sonner toasts use data-sonner-toast and data-type="success" for success toasts
+  const toastSelector = titleText
+    ? `[data-sonner-toast][data-type="success"]:has-text("${titleText}")`
+    : '[data-sonner-toast][data-type="success"]';
+
+  const toast = page.locator(toastSelector).first();
+  await toast.waitFor({
+    timeout: options?.timeout ?? 5000,
+    state: "visible",
+  });
+  return toast;
+}
