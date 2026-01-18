@@ -17,6 +17,36 @@ const isWindows = platform() === 'win32';
 const args = process.argv.slice(2);
 
 /**
+ * Convert Windows path to Unix-style for the detected bash variant
+ * @param {string} windowsPath - Windows-style path (e.g., C:\path\to\file)
+ * @param {string} bashCmd - Path to bash executable (used to detect variant)
+ * @returns {string} Unix-style path appropriate for the bash variant
+ */
+function convertPathForBash(windowsPath, bashCmd) {
+  let unixPath = windowsPath.replace(/\\/g, '/');
+  if (/^[A-Za-z]:/.test(unixPath)) {
+    const drive = unixPath[0].toLowerCase();
+    const pathPart = unixPath.slice(2);
+
+    // Detect bash type from path
+    if (bashCmd.toLowerCase().includes('cygwin')) {
+      // Cygwin expects /cygdrive/c/path format
+      return `/cygdrive/${drive}${pathPart}`;
+    } else if (
+      bashCmd.toLowerCase().includes('system32') ||
+      bashCmd === 'bash.exe'
+    ) {
+      // WSL bash is typically in System32 or just 'bash.exe' in PATH
+      return `/mnt/${drive}${pathPart}`;
+    } else {
+      // MSYS2/Git Bash expects /c/path format
+      return `/${drive}${pathPart}`;
+    }
+  }
+  return unixPath;
+}
+
+/**
  * Find bash executable on Windows
  */
 function findBashOnWindows() {
@@ -80,14 +110,8 @@ function runBashScript() {
       process.exit(1);
     }
 
-    // Convert Windows path to Unix-style for bash
-    // Handle both C:\path and /c/path styles
-    let unixPath = scriptPath.replace(/\\/g, '/');
-    if (/^[A-Za-z]:/.test(unixPath)) {
-      // Convert C:/path to /c/path for MSYS/Git Bash
-      unixPath = '/' + unixPath[0].toLowerCase() + unixPath.slice(2);
-    }
-
+    // Convert Windows path to appropriate Unix-style for the detected bash variant
+    const unixPath = convertPathForBash(scriptPath, bashCmd);
     bashArgs = [unixPath, ...args];
   } else {
     bashCmd = '/bin/bash';
@@ -115,7 +139,12 @@ function runBashScript() {
     process.exit(1);
   });
 
-  child.on('exit', (code) => {
+  child.on('exit', (code, signal) => {
+    if (signal) {
+      // Process was killed by a signal - exit with 1 to indicate abnormal termination
+      // (Unix convention is 128 + signal number, but we use 1 for simplicity)
+      process.exit(1);
+    }
     process.exit(code ?? 0);
   });
 
