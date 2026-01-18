@@ -37,6 +37,32 @@ DEFAULT_SERVER_PORT=3008
 WEB_PORT=$DEFAULT_WEB_PORT
 SERVER_PORT=$DEFAULT_SERVER_PORT
 
+# Port validation function
+# Returns 0 if valid, 1 if invalid (with error message printed)
+validate_port() {
+    local port="$1"
+    local port_name="${2:-port}"
+
+    # Check if port is a number
+    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+        echo "${C_RED}Error:${RESET} $port_name must be a number, got '$port'"
+        return 1
+    fi
+
+    # Check if port is in valid range (1-65535)
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        echo "${C_RED}Error:${RESET} $port_name must be between 1-65535, got '$port'"
+        return 1
+    fi
+
+    # Check if port is in privileged range (warning only)
+    if [ "$port" -lt 1024 ]; then
+        echo "${C_YELLOW}Warning:${RESET} $port_name $port is in privileged range (requires root/admin)"
+    fi
+
+    return 0
+}
+
 # Hostname configuration
 # Use VITE_HOSTNAME if explicitly set, otherwise default to localhost
 # Note: Don't use $HOSTNAME as it's a bash built-in containing the machine's hostname
@@ -510,9 +536,19 @@ check_ports() {
                     ;;
                 [uU]|[uU][sS][eE])
                     read -r -p "Enter web port (default $DEFAULT_WEB_PORT): " input_web
-                    WEB_PORT=${input_web:-$DEFAULT_WEB_PORT}
+                    input_web=${input_web:-$DEFAULT_WEB_PORT}
+                    if ! validate_port "$input_web" "Web port"; then
+                        continue
+                    fi
+                    WEB_PORT=$input_web
+
                     read -r -p "Enter server port (default $DEFAULT_SERVER_PORT): " input_server
-                    SERVER_PORT=${input_server:-$DEFAULT_SERVER_PORT}
+                    input_server=${input_server:-$DEFAULT_SERVER_PORT}
+                    if ! validate_port "$input_server" "Server port"; then
+                        continue
+                    fi
+                    SERVER_PORT=$input_server
+
                     echo "${C_GREEN}Using ports: Web=$WEB_PORT, Server=$SERVER_PORT${RESET}"
                     break
                     ;;
@@ -802,10 +838,20 @@ resolve_port_conflicts() {
                     local input_pad=$(( (TERM_COLS - 40) / 2 ))
                     printf "%${input_pad}s" ""
                     read -r -p "Enter web port (default $DEFAULT_WEB_PORT): " input_web
-                    WEB_PORT=${input_web:-$DEFAULT_WEB_PORT}
+                    input_web=${input_web:-$DEFAULT_WEB_PORT}
+                    if ! validate_port "$input_web" "Web port"; then
+                        continue
+                    fi
+                    WEB_PORT=$input_web
+
                     printf "%${input_pad}s" ""
                     read -r -p "Enter server port (default $DEFAULT_SERVER_PORT): " input_server
-                    SERVER_PORT=${input_server:-$DEFAULT_SERVER_PORT}
+                    input_server=${input_server:-$DEFAULT_SERVER_PORT}
+                    if ! validate_port "$input_server" "Server port"; then
+                        continue
+                    fi
+                    SERVER_PORT=$input_server
+
                     center_print "Using ports: Web=$WEB_PORT, Server=$SERVER_PORT" "$C_GREEN"
                     break
                     ;;

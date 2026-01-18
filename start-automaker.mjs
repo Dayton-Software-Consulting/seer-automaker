@@ -17,30 +17,71 @@ const isWindows = platform() === 'win32';
 const args = process.argv.slice(2);
 
 /**
+ * Detect the bash variant by checking $OSTYPE
+ * This is more reliable than path-based detection since bash.exe in PATH
+ * could be Git Bash, WSL, or something else
+ * @param {string} bashPath - Path to bash executable
+ * @returns {'WSL' | 'MSYS' | 'CYGWIN' | 'UNKNOWN'} The detected bash variant
+ */
+function detectBashVariant(bashPath) {
+  try {
+    const result = spawnSync(bashPath, ['-c', 'echo $OSTYPE'], {
+      stdio: 'pipe',
+      timeout: 2000,
+    });
+    if (result.status === 0) {
+      const ostype = result.stdout.toString().trim();
+      // WSL reports 'linux-gnu' or similar Linux identifier
+      if (ostype === 'linux-gnu' || ostype.startsWith('linux')) return 'WSL';
+      // MSYS2/Git Bash reports 'msys' or 'mingw*'
+      if (ostype.startsWith('msys') || ostype.startsWith('mingw')) return 'MSYS';
+      // Cygwin reports 'cygwin'
+      if (ostype.startsWith('cygwin')) return 'CYGWIN';
+    }
+  } catch {
+    // Fall through to path-based detection
+  }
+  // Fallback to path-based detection if $OSTYPE check fails
+  const lower = bashPath.toLowerCase();
+  if (lower.includes('cygwin')) return 'CYGWIN';
+  if (lower.includes('system32')) return 'WSL';
+  // Default to MSYS (Git Bash) as it's the most common
+  return 'MSYS';
+}
+
+/**
  * Convert Windows path to Unix-style for the detected bash variant
  * @param {string} windowsPath - Windows-style path (e.g., C:\path\to\file)
  * @param {string} bashCmd - Path to bash executable (used to detect variant)
  * @returns {string} Unix-style path appropriate for the bash variant
  */
 function convertPathForBash(windowsPath, bashCmd) {
+  // Input validation
+  if (!windowsPath || typeof windowsPath !== 'string') {
+    throw new Error('convertPathForBash: invalid windowsPath');
+  }
+  if (!bashCmd || typeof bashCmd !== 'string') {
+    throw new Error('convertPathForBash: invalid bashCmd');
+  }
+
   let unixPath = windowsPath.replace(/\\/g, '/');
   if (/^[A-Za-z]:/.test(unixPath)) {
     const drive = unixPath[0].toLowerCase();
     const pathPart = unixPath.slice(2);
 
-    // Detect bash type from path
-    if (bashCmd.toLowerCase().includes('cygwin')) {
-      // Cygwin expects /cygdrive/c/path format
-      return `/cygdrive/${drive}${pathPart}`;
-    } else if (
-      bashCmd.toLowerCase().includes('system32') ||
-      bashCmd === 'bash.exe'
-    ) {
-      // WSL bash is typically in System32 or just 'bash.exe' in PATH
-      return `/mnt/${drive}${pathPart}`;
-    } else {
-      // MSYS2/Git Bash expects /c/path format
-      return `/${drive}${pathPart}`;
+    // Detect bash variant via $OSTYPE (more reliable than path-based)
+    const variant = detectBashVariant(bashCmd);
+    switch (variant) {
+      case 'CYGWIN':
+        // Cygwin expects /cygdrive/c/path format
+        return `/cygdrive/${drive}${pathPart}`;
+      case 'WSL':
+        // WSL expects /mnt/c/path format
+        return `/mnt/${drive}${pathPart}`;
+      case 'MSYS':
+      default:
+        // MSYS2/Git Bash expects /c/path format
+        return `/${drive}${pathPart}`;
     }
   }
   return unixPath;
